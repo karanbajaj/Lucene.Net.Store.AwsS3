@@ -4,7 +4,7 @@ using System.Security.AccessControl;
 using System.Security.Principal;
 using System.Threading;
 
-namespace Lucene.Net.Store.Azure
+namespace Lucene.Net.Store.AwsS3
 {
     public static class BlobMutexManager
     {

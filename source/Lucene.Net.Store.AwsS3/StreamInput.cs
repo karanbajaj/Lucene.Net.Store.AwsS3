@@ -6,7 +6,7 @@ using System.Text;
 using System.IO;
 using Lucene.Net.Store;
 
-namespace Lucene.Net.Store.Azure
+namespace Lucene.Net.Store.AwsS3
 {
     /// <summary>
     /// Stream wrapper around IndexInput

@@ -8,9 +8,9 @@ Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = ".nuget", ".nuget", "{1F4274
 		.nuget\packages.config = .nuget\packages.config
 	EndProjectSection
 EndProject
-Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "Lucene.Net.Store.Azure", "Lucene.Net.Store.Azure\Lucene.Net.Store.Azure.csproj", "{D091F07C-ADD4-4860-ADBB-DA66819B8BE5}"
+Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "Lucene.Net.Store.AwsS3", "Lucene.Net.Store.AwsS3\Lucene.Net.Store.AwsS3.csproj", "{D091F07C-ADD4-4860-ADBB-DA66819B8BE5}"
 EndProject
-Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "Lucene.Net.Store.Azure.Tests", "Lucene.Net.Store.Azure.Tests\Lucene.Net.Store.Azure.Tests.csproj", "{64E5AA97-4090-4893-9880-9AC465F1FC62}"
+Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "Lucene.Net.Store.AwsS3.Tests", "Lucene.Net.Store.AwsS3.Tests\Lucene.Net.Store.AwsS3.Tests.csproj", "{64E5AA97-4090-4893-9880-9AC465F1FC62}"
 EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
