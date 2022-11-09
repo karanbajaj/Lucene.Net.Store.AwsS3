@@ -10,15 +10,13 @@ namespace Lucene.Net.Store.AwsS3
 	public class AwsS3IndexOutput : IndexOutput
 	{
 		private AwsS3Directory _awsDirectory;
-		//private BlobContainerClient _blobContainer;
-		private string _name;
+		private readonly string _name;
 		private IndexOutput _indexOutput;
 		private Mutex _fileMutex;
-		//private BlobClient _blob;
 
 		public AwsS3IndexOutput ( AwsS3Directory directory, string name )
 		{
-			this._name = name;
+			_name = name;
 			_fileMutex = BlobMutexManager.GrabMutex ( _name );
 			_fileMutex.WaitOne ();
 			try

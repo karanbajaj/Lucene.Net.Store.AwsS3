@@ -21,23 +21,18 @@ namespace Lucene.Net.Store.AwsS3
 
 	public class AwsS3Directory : Directory
 	{
-		private AmazonS3Client _s3Client;
-		private readonly string _bucketName;
-
 		private readonly string _subDirectory;
 
 		private readonly Dictionary<string, AwsS3Lock> _locks = new Dictionary<string, AwsS3Lock> ();
 		private LockFactory _lockFactory = new NativeFSLockFactory ();
 		private readonly Dictionary<string, AwsS3IndexOutput> _nameCache = new Dictionary<string, AwsS3IndexOutput> ();
 
-
-		public AmazonS3Client Client { get { return _s3Client; } }
-		public string BucketName { get { return _bucketName; } }
+		public AmazonS3Client S3Client { get; private set; }
+		public string Name { get; set; }
+		public string BucketName { get; private set; }
 
 		public override LockFactory LockFactory => _lockFactory;
 
-		//		public BlobContainerClient BlobContainer { get; private set; }
-		public string Name { get; set; }
 
 		/// <summary>
 		/// If set, this is the directory object to use as the local cache
@@ -55,9 +50,7 @@ namespace Lucene.Net.Store.AwsS3
 		/// <param name="storageAccount">staorage account to use</param>
 		/// <param name="catalog">name of catalog (folder in blob storage, can have subfolders like foo/bar)</param>
 		/// <remarks>Default local cache is to use file system in user/appdata/AwsS3Directory/Catalog</remarks>
-		public AwsS3Directory (
-		   S3Settings settings,
-			string catalog )
+		public AwsS3Directory ( S3Settings settings, string catalog )
 			: this ( settings, catalog, null )
 		{
 		}
@@ -68,10 +61,7 @@ namespace Lucene.Net.Store.AwsS3
 		/// <param name="storageAccount">storage account to use</param>
 		/// <param name="catalog">name of catalog (folder in blob storage, can have subfolders like foo/bar)</param>
 		/// <param name="cacheDirectory">local Directory object to use for local cache</param>
-		public AwsS3Directory (
-			S3Settings settings,
-			string catalog,
-			Directory cacheDirectory )
+		public AwsS3Directory ( S3Settings settings, string catalog, Directory cacheDirectory )
 		{
 			if ( settings == null )
 				throw new ArgumentNullException ( nameof ( settings ) );
@@ -88,8 +78,8 @@ namespace Lucene.Net.Store.AwsS3
 
 			_subDirectory = string.Join ( "/", list );
 
-			_s3Client = GetClient ( settings );
-			_bucketName = settings.BucketName;
+			S3Client = GetClient ( settings );
+			BucketName = settings.BucketName;
 
 			InitCacheDirectory ( cacheDirectory );
 		}
@@ -102,8 +92,6 @@ namespace Lucene.Net.Store.AwsS3
 			var client = new AmazonS3Client ( settings.KeyID, settings.SecretKey );
 			return client;
 		}
-
-
 
 		public void ClearCache ()
 		{
@@ -121,29 +109,22 @@ namespace Lucene.Net.Store.AwsS3
 		/// <summary>Returns an array of strings, one for each file in the directory. </summary>
 		public override string[] ListAll ()
 		{
-			//var results = Enumerable.Empty<string> ();
-			//return BlobContainer.GetBlobsByHierarchy ( delimiter: "/", prefix: this.subDirectory )
-			//	.Where ( x => x.IsBlob )
-			//	.Select ( x => x.Blob.Name ).ToArray ();
-
 			var request = new ListObjectsRequest
 			{
-				BucketName = _bucketName,
+				BucketName = BucketName,
 				Prefix = _subDirectory + "/"
 			};
 
 			var result = new List<string> ();
 
-			// 140 890 84
-
 			try
 			{
 				do
 				{
-					var response = _s3Client.ListObjectsAsync ( request ).GetAwaiter ().GetResult ();
+					var response = S3Client.ListObjectsAsync ( request ).GetAwaiter ().GetResult ();
 
 					// Process response.
-					result.AddRange ( response.S3Objects.Select ( y => y.Key ) );
+					result.AddRange ( response.S3Objects.Select ( y => y.Key.Substring ( request.Prefix.Length ) ) );
 
 					// If response is truncated, set the marker to get the next 
 					// set of keys.
@@ -157,7 +138,6 @@ namespace Lucene.Net.Store.AwsS3
 			}
 			catch ( Exception )
 			{
-				//			Logger.Error ( "Error getting file list from S3", ex );
 			}
 
 			return new string[0];
@@ -170,13 +150,13 @@ namespace Lucene.Net.Store.AwsS3
 			// this always comes from the server
 			var request = new GetObjectRequest
 			{
-				BucketName = _bucketName,
+				BucketName = BucketName,
 				Key = GetBlobName ( name )
 			};
 
 			try
 			{
-				using ( var response = _s3Client.GetObjectAsync ( request ).GetAwaiter ().GetResult () )
+				using ( var response = S3Client.GetObjectAsync ( request ).GetAwaiter ().GetResult () )
 				{
 					using ( var responseStream = response.ResponseStream )
 					{
@@ -198,9 +178,6 @@ namespace Lucene.Net.Store.AwsS3
 #if FULLDEBUG
 			Debug.WriteLine ( $"{Name} deleting {name} " );
 #endif
-			//var blobName = GetBlobName ( name );
-			//var blob = BlobContainer.GetBlobClient ( blobName );
-			//blob.DeleteIfExists ();
 
 			string key;
 			if ( _subDirectory.Length > 1 && name.StartsWith ( $"{_subDirectory}/" ) )
@@ -210,26 +187,24 @@ namespace Lucene.Net.Store.AwsS3
 
 			var request = new DeleteObjectRequest
 			{
-				BucketName = _bucketName,
+				BucketName = BucketName,
 				Key = key
 			};
 
 			try
 			{
-				var response = _s3Client.DeleteObjectAsync ( request ).GetAwaiter ().GetResult ();
+				var response = S3Client.DeleteObjectAsync ( request ).GetAwaiter ().GetResult ();
 			}
-			catch ( Exception ex )
+			catch ( Exception )
 			{
-				//Logger.Error ( "Error getting checksum", ex );
 			}
 
 			try
 			{
 				CacheDirectory.DeleteFile ( name );
 			}
-			catch ( Exception ex)
+			catch ( Exception )
 			{
-				Debug.WriteLine (ex.ToString ());
 			}
 		}
 
@@ -238,13 +213,13 @@ namespace Lucene.Net.Store.AwsS3
 		{
 			var request = new GetObjectMetadataRequest
 			{
-				BucketName = _bucketName,
+				BucketName = BucketName,
 				Key = GetBlobName ( name )
 			};
 
 			try
 			{
-				var response = _s3Client.GetObjectMetadataAsync ( request ).GetAwaiter ().GetResult ();
+				var response = S3Client.GetObjectMetadataAsync ( request ).GetAwaiter ().GetResult ();
 				return response.ContentLength;
 			}
 			catch
@@ -257,13 +232,13 @@ namespace Lucene.Net.Store.AwsS3
 		{
 			var request = new GetObjectRequest
 			{
-				BucketName = _bucketName,
+				BucketName = BucketName,
 				Key = GetBlobName ( name )
 			};
 
 			try
 			{
-				var response = _s3Client.GetObjectAsync ( request ).GetAwaiter ().GetResult ();
+				var response = S3Client.GetObjectAsync ( request ).GetAwaiter ().GetResult ();
 				using ( var responseStream = response.ResponseStream )
 				{
 					responseStream.CopyTo ( outStream );
@@ -280,14 +255,14 @@ namespace Lucene.Net.Store.AwsS3
 		{
 			var request = new PutObjectRequest
 			{
-				BucketName = _bucketName,
+				BucketName = BucketName,
 				Key = GetBlobName ( name ),
 				InputStream = inStream
 			};
 
 			try
 			{
-				var response = _s3Client.PutObjectAsync ( request ).GetAwaiter ().GetResult ();
+				var response = S3Client.PutObjectAsync ( request ).GetAwaiter ().GetResult ();
 				return ( response.HttpStatusCode == HttpStatusCode.OK );
 			}
 			catch
@@ -295,7 +270,6 @@ namespace Lucene.Net.Store.AwsS3
 			}
 			return false;
 		}
-
 
 		public override void Sync ( ICollection<string> names )
 		{
@@ -352,7 +326,7 @@ namespace Lucene.Net.Store.AwsS3
 		/// <summary>Closes the store. </summary>
 		protected override void Dispose ( bool disposing )
 		{
-			_s3Client = VcSoft.Utility.VcUtil.CleanMe ( _s3Client );
+			S3Client = VcSoft.Utility.VcUtil.CleanMe ( S3Client );
 		}
 
 		public override void SetLockFactory ( LockFactory lockFactory )

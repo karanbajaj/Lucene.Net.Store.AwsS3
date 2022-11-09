@@ -13,7 +13,6 @@ namespace Lucene.Net.Store.AwsS3
 	{
 		private readonly string _name;
 		private AwsS3Directory _awsDirectory;
-
 		private IndexInput _indexInput;
 		private Mutex _fileMutex;
 

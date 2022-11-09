@@ -20,16 +20,15 @@ namespace Lucene.Net.Store.AwsS3
 		private const int mciLeaseIDLength = 35;
 		private const char mccLockSeparator = '%';
 
-		private string _lockFile;
-		private readonly string _bucketName;
-		private AwsS3Directory _awsDirectory;
+		private static readonly Random _rand = new Random ();
+
+		private readonly string _lockFile;
+		private readonly AwsS3Directory _awsDirectory;
 		private string _leaseid;
 
 		public AwsS3Lock ( string lockFile, AwsS3Directory directory )
 		{
-			_lockFile = directory.GetBlobName ( lockFile );
-
-			_bucketName = directory.BucketName;
+			_lockFile = lockFile;
 			_awsDirectory = directory;
 		}
 
@@ -43,9 +42,8 @@ namespace Lucene.Net.Store.AwsS3
 			public bool IsValid { get { return !string.IsNullOrEmpty ( LeaseID ) && TimeExpiryDate > DateTime.MinValue; } }
 		}
 
-		private string GetRandomBody ( int length )
+		private string CreateNewID ( int length )
 		{
-			var rand = new Random ();
 			var bfr = new StringBuilder ();
 			var lineLength = 0;
 
@@ -56,7 +54,7 @@ namespace Lucene.Net.Store.AwsS3
 						bfr.Append ( '-' );
 					else
 						bfr.AppendLine ();
-				var ch = rand.Next ( 65 );
+				var ch = _rand.Next ( 62 );
 				ch = ch < 10 ? ( '0' + ch ) : ( ch < 36 ? 'A' + ch - 10 : 'a' + ch - 36 );
 				bfr.Append ( (char)ch );
 			}
@@ -67,13 +65,13 @@ namespace Lucene.Net.Store.AwsS3
 		{
 			var request = new GetObjectRequest
 			{
-				BucketName = _bucketName,
+				BucketName = _awsDirectory.BucketName,
 				Key = objectName,
 			};
 
 			try
 			{
-				var response = await _awsDirectory.Client.GetObjectAsync ( request );
+				var response = await _awsDirectory.S3Client.GetObjectAsync ( request );
 
 				if ( response.HttpStatusCode != HttpStatusCode.OK )
 					return null;
@@ -100,20 +98,15 @@ namespace Lucene.Net.Store.AwsS3
 					}
 				}
 			}
-			//catch ( AmazonS3Exception ex )
-			//{
-			//    return null;
-			//}
-			catch ( Exception ex )
+			catch ( Exception )
 			{
-				//Console.WriteLine ( ex );
 			}
 			return null;
 		}
 
 		private Task<LockInfo> WriteNewLockFileAsync ( string objectName, TimeSpan expiration )
 		{
-			var id = GetRandomBody ( mciLeaseIDLength );
+			var id = CreateNewID ( mciLeaseIDLength );
 			return WriteLockFileAsync ( objectName, id, expiration );
 		}
 
@@ -126,21 +119,20 @@ namespace Lucene.Net.Store.AwsS3
 			content.Append ( leaseID );
 			var request = new PutObjectRequest
 			{
-				BucketName = _bucketName,
+				BucketName = _awsDirectory.BucketName,
 				Key = objectName,
 				ContentBody = content.ToString ()
 			};
 
 			try
 			{
-				var result = await _awsDirectory.Client.PutObjectAsync ( request );
+				var result = await _awsDirectory.S3Client.PutObjectAsync ( request );
 
 				if ( result.HttpStatusCode != HttpStatusCode.OK )
 					return null;
 			}
-			catch ( Exception ex )
+			catch ( Exception )
 			{
-				Console.WriteLine ( ex );
 				return null;
 			}
 
@@ -185,18 +177,17 @@ namespace Lucene.Net.Store.AwsS3
 		{
 			var request = new DeleteObjectRequest
 			{
-				BucketName = _bucketName,
+				BucketName = _awsDirectory.BucketName,
 				Key = objectName,
 			};
 
 			try
 			{
-				var response = await _awsDirectory.Client.DeleteObjectAsync ( request );
+				var response = await _awsDirectory.S3Client.DeleteObjectAsync ( request );
 				return ( response.HttpStatusCode == HttpStatusCode.NoContent );
 			}
-			catch ( Exception ex )
+			catch ( Exception )
 			{
-				//Console.WriteLine ( ex );
 			}
 			return false;
 		}
@@ -226,7 +217,7 @@ namespace Lucene.Net.Store.AwsS3
 		{
 			Debug.WriteLine ( $"{_awsDirectory.Name} IsLocked() : {_leaseid}" );
 
-			var result = IsLockedAsync ( _lockFile, _leaseid ).GetAwaiter ().GetResult ();
+			var result = IsLockedAsync ( _awsDirectory.GetBlobName ( _lockFile ), _leaseid ).GetAwaiter ().GetResult ();
 			Debug.Print ( $"IsLocked() : {result}" );
 
 			return result;
@@ -234,14 +225,16 @@ namespace Lucene.Net.Store.AwsS3
 
 		public override bool Obtain ()
 		{
+			Debug.WriteLine ( $"{_awsDirectory.Name} AwsS3Lock:Obtain({_lockFile}) : {_leaseid}" );
 			if ( string.IsNullOrEmpty ( _leaseid ) )
 			{
-				var lease = WriteNewLockFileAsync ( _lockFile, TimeSpan.FromSeconds ( mciLockDurationSeconds ) )
+				var lease = WriteNewLockFileAsync ( _awsDirectory.GetBlobName ( _lockFile ), TimeSpan.FromSeconds ( mciLockDurationSeconds ) )
 					.GetAwaiter ().GetResult ();
 
 				if ( lease != null && lease.IsValid )
 				{
 					_leaseid = lease.LeaseID;
+					Debug.WriteLine ( $"{_awsDirectory.Name} AwsS3Lock:Obtain({_lockFile}): AcquireLease : {_leaseid}" );
 
 					// keep the lease alive by renewing every 30 seconds
 					long interval = (long)TimeSpan.FromSeconds ( mciLockDurationSeconds / 2 ).TotalMilliseconds;
@@ -267,7 +260,7 @@ namespace Lucene.Net.Store.AwsS3
 			{
 				Debug.Print ( "AwsS3Lock:Renew({0} : {1}", _lockFile, _leaseid );
 
-				_ = WriteLockFileAsync ( _lockFile, _leaseid, TimeSpan.FromSeconds ( mciLockDurationSeconds ) )
+				_ = WriteLockFileAsync ( _awsDirectory.GetBlobName ( _lockFile ), _leaseid, TimeSpan.FromSeconds ( mciLockDurationSeconds ) )
 				   .GetAwaiter ().GetResult ();
 			}
 		}
@@ -279,7 +272,7 @@ namespace Lucene.Net.Store.AwsS3
 			Debug.Print ( "AwsS3Lock:BreakLock({0}) {1}", _lockFile, _leaseid );
 			if ( !string.IsNullOrEmpty ( _leaseid ) )
 			{
-				_ = ReleaseAsync ( _lockFile, _leaseid );
+				_ = ReleaseAsync ( _awsDirectory.GetBlobName ( _lockFile ), _leaseid );
 			}
 			_leaseid = null;
 		}
@@ -294,7 +287,7 @@ namespace Lucene.Net.Store.AwsS3
 			Debug.WriteLine ( $"{_awsDirectory.Name} AwsS3Lock:Release({_lockFile}) {_leaseid}" );
 			if ( !string.IsNullOrEmpty ( _leaseid ) )
 			{
-				_ = ReleaseAsync ( _lockFile, _leaseid )
+				_ = ReleaseAsync ( _awsDirectory.GetBlobName ( _lockFile ), _leaseid )
 					.GetAwaiter ().GetResult ();
 
 				if ( _renewTimer != null )
