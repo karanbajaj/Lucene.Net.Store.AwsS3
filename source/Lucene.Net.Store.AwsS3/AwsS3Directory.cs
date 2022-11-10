@@ -362,7 +362,18 @@ namespace Lucene.Net.Store.AwsS3
 				return;
 			}
 
-			string cachePath = Path.Combine ( Environment.ExpandEnvironmentVariables ( "%temp%" ), "AwsS3Directory" );
+			string cachePath;
+			if (! string.IsNullOrEmpty ( Environment.GetEnvironmentVariable ( "LAMBDA_TASK_ROOT" ) ) )
+			{
+				cachePath = "/tmp";
+			}
+			else
+			{
+				cachePath = Environment.ExpandEnvironmentVariables ( "%temp%" );
+			}
+
+			cachePath = Path.Combine ( cachePath, "AwsS3Directory" );
+
 			DirectoryInfo localDir = new DirectoryInfo ( cachePath );
 			if ( !localDir.Exists )
 				localDir.Create ();

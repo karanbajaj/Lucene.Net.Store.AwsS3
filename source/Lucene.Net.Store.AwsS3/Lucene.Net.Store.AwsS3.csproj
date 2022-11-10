@@ -4,18 +4,19 @@
     <TargetFramework>netstandard2.1</TargetFramework>
     <GeneratePackageOnBuild>true</GeneratePackageOnBuild>
     <Version>4.8.0-beta015</Version>
-    <Authors>Tom Laird-McConnell</Authors>
+    <Authors>bhelke</Authors>
     <Title>Aws S3 storage for Lucene.net</Title>
     <Summary>This project allows you to store Lucene Indexes in by AWS S3 bucket.</Summary>
     <Description>This project allows you to create Lucene Indexes via a AwsS3Directory object which uses AWS S3 Storage for persistent storage.  This .NET Standard compliant library for us with .NET Core or .NET Desktop. It uses Lucene.Net 4.8.0.beta00016</Description>
     <PackageLicenseFile></PackageLicenseFile>
-    <PackageProjectUrl>https://github.com/tomlm/Lucene.Net.Store.AwsS3</PackageProjectUrl>
+    <PackageProjectUrl>https://github.com/maheshbh/Lucene.Net.Store.AwsS3</PackageProjectUrl>
     <RepositoryUrl>https://github.com/tomlm/Lucene.Net.Store.AwsS3</RepositoryUrl>
     <RepositoryType>git</RepositoryType>
     <PackageLicenseExpression>MS-PL</PackageLicenseExpression>
     <AssemblyVersion>4.8.0.16</AssemblyVersion>
     <FileVersion>4.8.0.16</FileVersion>
     <PackageReleaseNotes>This is a release with dependency on Lucene.Net 4.8.0.beta 0016</PackageReleaseNotes>
+    <PackageId>$(AssemblyName).vcsoft</PackageId>
   </PropertyGroup>
 
   <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Debug|AnyCPU'">
