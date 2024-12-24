@@ -5,7 +5,9 @@ using System.Diagnostics;
 using System.IO;
 using System.Linq;
 using System.Net;
-
+using System.Runtime;
+using Amazon;
+using Amazon.Runtime;
 using Amazon.S3;
 using Amazon.S3.Model;
 
@@ -13,13 +15,195 @@ namespace Lucene.Net.Store.AwsS3
 {
 	public class S3Settings
 	{
-		public string BucketName { get; set; }
-		public string BucketFolder { get; set; }
-		public string KeyID { get; set; }
+        public string ConnectionString { get; set; }
+       
+        public string AccessKey { get; set; }
 		public string SecretKey { get; set; }
-	}
+        public AWSCredentials Credentials { get; set; }
+        public string Region { get; set; }
+        public string ServiceUrl { get; set; }
+        public bool? UseChunkEncoding { get; set; }
+        public S3CannedACL CannedACL { get; set; }
+        public string BucketName { get; set; }
+        public string BucketFolder { get; set; }
 
-	public class AwsS3Directory : Directory
+        public AWSCredentials GetCredentials()
+        {
+            return !String.IsNullOrEmpty(AccessKey)
+                ? new BasicAWSCredentials(AccessKey, SecretKey)
+                : null;
+        }
+
+        public RegionEndpoint GetRegion()
+        {
+            return !String.IsNullOrEmpty(Region)
+                ? RegionEndpoint.GetBySystemName(Region)
+                : null;
+        }
+        public virtual bool ParseItem(string key, string value)
+        {
+            if (String.Equals(key, "AccessKey", StringComparison.OrdinalIgnoreCase) ||
+                String.Equals(key, "Access Key", StringComparison.OrdinalIgnoreCase) ||
+                String.Equals(key, "AccessKeyId", StringComparison.OrdinalIgnoreCase) ||
+                String.Equals(key, "Access Key Id", StringComparison.OrdinalIgnoreCase) ||
+                String.Equals(key, "Id", StringComparison.OrdinalIgnoreCase))
+            {
+                AccessKey = value;
+                return true;
+            }
+            if (String.Equals(key, "SecretKey", StringComparison.OrdinalIgnoreCase) ||
+                String.Equals(key, "Secret Key", StringComparison.OrdinalIgnoreCase) ||
+                String.Equals(key, "SecretAccessKey", StringComparison.OrdinalIgnoreCase) ||
+                String.Equals(key, "Secret Access Key", StringComparison.OrdinalIgnoreCase) ||
+                String.Equals(key, "Secret", StringComparison.OrdinalIgnoreCase))
+            {
+                SecretKey = value;
+                return true;
+            }
+            if (String.Equals(key, "EndPoint", StringComparison.OrdinalIgnoreCase) ||
+                String.Equals(key, "End Point", StringComparison.OrdinalIgnoreCase) ||
+                String.Equals(key, "Region", StringComparison.OrdinalIgnoreCase))
+            {
+                Region = value;
+                return true;
+            }
+            if (String.Equals(key, "Service", StringComparison.OrdinalIgnoreCase) ||
+                String.Equals(key, "Service Url", StringComparison.OrdinalIgnoreCase) ||
+                String.Equals(key, "ServiceUrl", StringComparison.OrdinalIgnoreCase))
+            {
+                ServiceUrl = value;
+                return true;
+            }
+            if (String.Equals(key, "Bucket", StringComparison.OrdinalIgnoreCase) ||
+                String.Equals(key, "Bucket Name", StringComparison.OrdinalIgnoreCase) )
+            {
+                ServiceUrl = value;
+                return true;
+            }
+            return false;
+        }
+
+        public override string ToString()
+        {
+            string connectionString = String.Empty;
+            if (!String.IsNullOrEmpty(AccessKey))
+                connectionString += "AccessKey=" + AccessKey + ";";
+            if (!String.IsNullOrEmpty(SecretKey))
+                connectionString += "SecretKey=" + SecretKey + ";";
+            if (!String.IsNullOrEmpty(Region))
+                connectionString += "Region=" + Region + ";";
+            if (!String.IsNullOrEmpty(ServiceUrl))
+                connectionString += "ServiceUrl=" + ServiceUrl + ";";
+            return connectionString;
+        }
+    }
+
+	public class S3SettingBuilder
+    {
+        private readonly S3Settings _settings = new S3Settings();
+
+        public S3SettingBuilder ConnectionString(string connectionString)
+        {
+            if (String.IsNullOrEmpty(connectionString))
+                throw new ArgumentNullException(nameof(connectionString));
+            _settings.ConnectionString = connectionString;
+            return this;
+        }
+        public S3SettingBuilder BucketName(string bucketName)
+        {
+            _settings.BucketName = bucketName;
+            return this;
+        }
+		public S3SettingBuilder AccessKey(string accessKey)
+        {
+            _settings.AccessKey = accessKey;
+            return this;
+        }
+        public S3SettingBuilder SecretKey(string secretKey)
+        {
+            _settings.SecretKey = secretKey;
+            return this;
+        }
+
+        public S3SettingBuilder BucketFolder(string bucketFolder)
+        {
+            _settings.BucketFolder = bucketFolder;
+            return this;
+        }
+
+        public S3SettingBuilder Credentials(AWSCredentials credentials)
+        {
+            _settings.Credentials = credentials;
+            return this;
+        }
+        public S3SettingBuilder Credentials(string accessKey, string secretKey)
+        {
+            if (String.IsNullOrEmpty(accessKey))
+                throw new ArgumentNullException(nameof(accessKey));
+            if (String.IsNullOrEmpty(secretKey))
+                throw new ArgumentNullException(nameof(secretKey));
+
+            _settings.Credentials = new BasicAWSCredentials(accessKey, secretKey);
+            return this;
+        }
+
+        public S3SettingBuilder Region(RegionEndpoint region)
+        {
+            _settings.Region = region.ToString();
+            return this;
+        }
+
+        public S3SettingBuilder ServiceUrl(string serviceUrl)
+        {
+            _settings.ServiceUrl = serviceUrl;
+            return this;
+        }
+
+        public S3SettingBuilder UseChunkEncoding(bool useChunkEncoding)
+        {
+            _settings.UseChunkEncoding = useChunkEncoding;
+            return this;
+        }
+
+        public S3SettingBuilder CannedACL(S3CannedACL cannedACL)
+        {
+            _settings.CannedACL = cannedACL;
+            return this;
+        }
+        public S3SettingBuilder CannedACL(string cannedAcl)
+        {
+            if (String.IsNullOrEmpty(cannedAcl))
+                throw new ArgumentNullException(nameof(cannedAcl));
+            _settings.CannedACL = S3CannedACL.FindValue(cannedAcl);
+            return this;
+        }
+
+        public S3Settings Build()
+        {
+            if (String.IsNullOrEmpty(_settings.ConnectionString))
+                return _settings;
+
+            Parse(_settings.ConnectionString);
+
+            return _settings;
+        }
+        private void Parse(string connectionString)
+        {
+            foreach (var option in connectionString
+                .Split(new[] { ';' }, StringSplitOptions.RemoveEmptyEntries)
+                .Where(kvp => kvp.Contains('='))
+                .Select(kvp => kvp.Split(new[] { '=' }, 2)))
+            {
+                string optionKey = option[0].Trim();
+                string optionValue = option[1].Trim();
+                if (!_settings.ParseItem(optionKey, optionValue))
+                    throw new ArgumentException($"The option '{optionKey}' cannot be recognized in connection string.", nameof(connectionString));
+            }
+        }
+      
+    }
+
+    public class AwsS3Directory : Directory
 	{
 		private readonly string _subDirectory;
 
@@ -86,10 +270,10 @@ namespace Lucene.Net.Store.AwsS3
 
 		private static AmazonS3Client GetClient ( S3Settings settings )
 		{
-			if ( string.IsNullOrEmpty ( settings.KeyID ) && string.IsNullOrEmpty ( settings.SecretKey ) )
+			if ( string.IsNullOrEmpty ( settings.AccessKey ) && string.IsNullOrEmpty ( settings.SecretKey ) )
 				return new AmazonS3Client ();
 
-			var client = new AmazonS3Client ( settings.KeyID, settings.SecretKey );
+			var client = new AmazonS3Client(settings.GetCredentials(), settings.GetRegion()); 
 			return client;
 		}
 
