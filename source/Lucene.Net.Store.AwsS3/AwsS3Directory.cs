@@ -6,202 +6,11 @@ using System.IO;
 using System.Linq;
 using System.Net;
 using System.Runtime;
-using Amazon;
-using Amazon.Runtime;
 using Amazon.S3;
 using Amazon.S3.Model;
 
 namespace Lucene.Net.Store.AwsS3
 {
-	public class S3Settings
-	{
-        public string ConnectionString { get; set; }
-       
-        public string AccessKey { get; set; }
-		public string SecretKey { get; set; }
-        public AWSCredentials Credentials { get; set; }
-        public string Region { get; set; }
-        public string ServiceUrl { get; set; }
-        public bool? UseChunkEncoding { get; set; }
-        public S3CannedACL CannedACL { get; set; }
-        public string BucketName { get; set; }
-        public string BucketFolder { get; set; }
-
-        public AWSCredentials GetCredentials()
-        {
-            return !String.IsNullOrEmpty(AccessKey)
-                ? new BasicAWSCredentials(AccessKey, SecretKey)
-                : null;
-        }
-
-        public RegionEndpoint GetRegion()
-        {
-            return !String.IsNullOrEmpty(Region)
-                ? RegionEndpoint.GetBySystemName(Region)
-                : null;
-        }
-        public virtual bool ParseItem(string key, string value)
-        {
-            if (String.Equals(key, "AccessKey", StringComparison.OrdinalIgnoreCase) ||
-                String.Equals(key, "Access Key", StringComparison.OrdinalIgnoreCase) ||
-                String.Equals(key, "AccessKeyId", StringComparison.OrdinalIgnoreCase) ||
-                String.Equals(key, "Access Key Id", StringComparison.OrdinalIgnoreCase) ||
-                String.Equals(key, "Id", StringComparison.OrdinalIgnoreCase))
-            {
-                AccessKey = value;
-                return true;
-            }
-            if (String.Equals(key, "SecretKey", StringComparison.OrdinalIgnoreCase) ||
-                String.Equals(key, "Secret Key", StringComparison.OrdinalIgnoreCase) ||
-                String.Equals(key, "SecretAccessKey", StringComparison.OrdinalIgnoreCase) ||
-                String.Equals(key, "Secret Access Key", StringComparison.OrdinalIgnoreCase) ||
-                String.Equals(key, "Secret", StringComparison.OrdinalIgnoreCase))
-            {
-                SecretKey = value;
-                return true;
-            }
-            if (String.Equals(key, "EndPoint", StringComparison.OrdinalIgnoreCase) ||
-                String.Equals(key, "End Point", StringComparison.OrdinalIgnoreCase) ||
-                String.Equals(key, "Region", StringComparison.OrdinalIgnoreCase))
-            {
-                Region = value;
-                return true;
-            }
-            if (String.Equals(key, "Service", StringComparison.OrdinalIgnoreCase) ||
-                String.Equals(key, "Service Url", StringComparison.OrdinalIgnoreCase) ||
-                String.Equals(key, "ServiceUrl", StringComparison.OrdinalIgnoreCase))
-            {
-                ServiceUrl = value;
-                return true;
-            }
-            if (String.Equals(key, "Bucket", StringComparison.OrdinalIgnoreCase) ||
-                String.Equals(key, "Bucket Name", StringComparison.OrdinalIgnoreCase) )
-            {
-                ServiceUrl = value;
-                return true;
-            }
-            return false;
-        }
-
-        public override string ToString()
-        {
-            string connectionString = String.Empty;
-            if (!String.IsNullOrEmpty(AccessKey))
-                connectionString += "AccessKey=" + AccessKey + ";";
-            if (!String.IsNullOrEmpty(SecretKey))
-                connectionString += "SecretKey=" + SecretKey + ";";
-            if (!String.IsNullOrEmpty(Region))
-                connectionString += "Region=" + Region + ";";
-            if (!String.IsNullOrEmpty(ServiceUrl))
-                connectionString += "ServiceUrl=" + ServiceUrl + ";";
-            return connectionString;
-        }
-    }
-
-	public class S3SettingBuilder
-    {
-        private readonly S3Settings _settings = new S3Settings();
-
-        public S3SettingBuilder ConnectionString(string connectionString)
-        {
-            if (String.IsNullOrEmpty(connectionString))
-                throw new ArgumentNullException(nameof(connectionString));
-            _settings.ConnectionString = connectionString;
-            return this;
-        }
-        public S3SettingBuilder BucketName(string bucketName)
-        {
-            _settings.BucketName = bucketName;
-            return this;
-        }
-		public S3SettingBuilder AccessKey(string accessKey)
-        {
-            _settings.AccessKey = accessKey;
-            return this;
-        }
-        public S3SettingBuilder SecretKey(string secretKey)
-        {
-            _settings.SecretKey = secretKey;
-            return this;
-        }
-
-        public S3SettingBuilder BucketFolder(string bucketFolder)
-        {
-            _settings.BucketFolder = bucketFolder;
-            return this;
-        }
-
-        public S3SettingBuilder Credentials(AWSCredentials credentials)
-        {
-            _settings.Credentials = credentials;
-            return this;
-        }
-        public S3SettingBuilder Credentials(string accessKey, string secretKey)
-        {
-            if (String.IsNullOrEmpty(accessKey))
-                throw new ArgumentNullException(nameof(accessKey));
-            if (String.IsNullOrEmpty(secretKey))
-                throw new ArgumentNullException(nameof(secretKey));
-
-            _settings.Credentials = new BasicAWSCredentials(accessKey, secretKey);
-            return this;
-        }
-
-        public S3SettingBuilder Region(RegionEndpoint region)
-        {
-            _settings.Region = region.ToString();
-            return this;
-        }
-
-        public S3SettingBuilder ServiceUrl(string serviceUrl)
-        {
-            _settings.ServiceUrl = serviceUrl;
-            return this;
-        }
-
-        public S3SettingBuilder UseChunkEncoding(bool useChunkEncoding)
-        {
-            _settings.UseChunkEncoding = useChunkEncoding;
-            return this;
-        }
-
-        public S3SettingBuilder CannedACL(S3CannedACL cannedACL)
-        {
-            _settings.CannedACL = cannedACL;
-            return this;
-        }
-        public S3SettingBuilder CannedACL(string cannedAcl)
-        {
-            if (String.IsNullOrEmpty(cannedAcl))
-                throw new ArgumentNullException(nameof(cannedAcl));
-            _settings.CannedACL = S3CannedACL.FindValue(cannedAcl);
-            return this;
-        }
-
-        public S3Settings Build()
-        {
-            if (String.IsNullOrEmpty(_settings.ConnectionString))
-                return _settings;
-
-            Parse(_settings.ConnectionString);
-
-            return _settings;
-        }
-        private void Parse(string connectionString)
-        {
-            foreach (var option in connectionString
-                .Split(new[] { ';' }, StringSplitOptions.RemoveEmptyEntries)
-                .Where(kvp => kvp.Contains('='))
-                .Select(kvp => kvp.Split(new[] { '=' }, 2)))
-            {
-                string optionKey = option[0].Trim();
-                string optionValue = option[1].Trim();
-                if (!_settings.ParseItem(optionKey, optionValue))
-                    throw new ArgumentException($"The option '{optionKey}' cannot be recognized in connection string.", nameof(connectionString));
-            }
-        }
-      
-    }
 
     public class AwsS3Directory : Directory
 	{
@@ -223,7 +32,7 @@ namespace Lucene.Net.Store.AwsS3
 		/// </summary>
 		public Directory CacheDirectory { get; set; }
 
-		public AwsS3Directory ( S3Settings settings ) :
+		public AwsS3Directory ( AwsS3Settings settings ) :
 				this ( settings, null, null )
 		{
 		}
@@ -234,7 +43,7 @@ namespace Lucene.Net.Store.AwsS3
 		/// <param name="storageAccount">staorage account to use</param>
 		/// <param name="catalog">name of catalog (folder in blob storage, can have subfolders like foo/bar)</param>
 		/// <remarks>Default local cache is to use file system in user/appdata/AwsS3Directory/Catalog</remarks>
-		public AwsS3Directory ( S3Settings settings, string catalog )
+		public AwsS3Directory ( AwsS3Settings settings, string catalog )
 			: this ( settings, catalog, null )
 		{
 		}
@@ -245,7 +54,7 @@ namespace Lucene.Net.Store.AwsS3
 		/// <param name="storageAccount">storage account to use</param>
 		/// <param name="catalog">name of catalog (folder in blob storage, can have subfolders like foo/bar)</param>
 		/// <param name="cacheDirectory">local Directory object to use for local cache</param>
-		public AwsS3Directory ( S3Settings settings, string catalog, Directory cacheDirectory )
+		public AwsS3Directory ( AwsS3Settings settings, string catalog, Directory cacheDirectory )
 		{
 			if ( settings == null )
 				throw new ArgumentNullException ( nameof ( settings ) );
@@ -268,7 +77,7 @@ namespace Lucene.Net.Store.AwsS3
 			InitCacheDirectory ( cacheDirectory );
 		}
 
-		private static AmazonS3Client GetClient ( S3Settings settings )
+		private static AmazonS3Client GetClient ( AwsS3Settings settings )
 		{
 			if ( string.IsNullOrEmpty ( settings.AccessKey ) && string.IsNullOrEmpty ( settings.SecretKey ) )
 				return new AmazonS3Client ();
@@ -510,8 +319,22 @@ namespace Lucene.Net.Store.AwsS3
 		/// <summary>Closes the store. </summary>
 		protected override void Dispose ( bool disposing )
 		{
-			S3Client = VcSoft.Utility.VcUtil.CleanMe ( S3Client );
-		}
+			//S3Client = VcSoft.Utility.VcUtil.CleanMe ( S3Client );
+            //cleanup s3client
+            if (disposing)
+            {
+                // Cleanup S3Client
+                if (S3Client != null)
+                {
+                    S3Client.Dispose();
+                    S3Client = null;
+                }
+                // Dispose other managed resources here if any
+            }
+
+            // Dispose unmanaged resources here if any
+            
+        }
 
 		public override void SetLockFactory ( LockFactory lockFactory )
 		{
